@@ -263,7 +263,7 @@ _update_tables_for_npcap_loopback(IP_ADAPTER_ADDRESSES *p)
 	 * processes, but works for Nmap.  */
 	if (npcap_loopback_name[0] == '\0')
 		g_has_npcap_loopback = intf_get_loopback_name(npcap_loopback_name, 1024);
-	if (g_has_npcap_loopback == 0)
+	else if (g_has_npcap_loopback == 0)
 		return p;
 
 	if (!p)
@@ -287,6 +287,7 @@ _update_tables_for_npcap_loopback(IP_ADAPTER_ADDRESSES *p)
 	 * supposed to create this. */
 	if (!a_original_loopback)
 		return p;
+	g_has_npcap_loopback = 1;
 	/* If we didn't find the legacy adapter, use the modern adapter name. */
 	if (!a_npcap_loopback) {
 		/* Overwrite the name we got from the Registry, in case it's a broken legacy
@@ -504,7 +505,7 @@ intf_loop(intf_t *intf, intf_handler callback, void *arg)
 	IP_ADAPTER_ADDRESSES *a;
 	struct intf_entry *entry;
 	u_char ebuf[1024];
-	int ret;
+	int ret = 0;
 
 	if (_refresh_tables(intf) < 0)
 		return (-1);

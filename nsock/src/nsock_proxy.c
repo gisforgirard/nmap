@@ -3,16 +3,15 @@
  *                                                                         *
  ***********************IMPORTANT NSOCK LICENSE TERMS***********************
  *                                                                         *
- * The nsock parallel socket event library is (C) 1999-2019 Insecure.Com   *
+ * The nsock parallel socket event library is (C) 1999-2022 Nmap Software  *
  * LLC This library is free software; you may redistribute and/or          *
  * modify it under the terms of the GNU General Public License as          *
  * published by the Free Software Foundation; Version 2.  This guarantees  *
  * your right to use, modify, and redistribute this software under certain *
- * conditions.  If this license is unacceptable to you, Insecure.Com LLC   *
- * may be willing to sell alternative licenses (contact                    *
- * sales@insecure.com ).                                                   *
+ * conditions.  If this license is unacceptable to you, Nmap Software LLC  *
+ * may be willing to sell alternative licenses (contact sales@nmap.com ).  *
  *                                                                         *
- * As a special exception to the GPL terms, Insecure.Com LLC grants        *
+ * As a special exception to the GPL terms, Nmap Software LLC grants       *
  * permission to link the code of this program with any version of the     *
  * OpenSSL library which is distributed under a license identical to that  *
  * listed in the included docs/licenses/OpenSSL.txt file, and distribute   *
@@ -35,7 +34,7 @@
  * main distribution.  By sending these changes to Fyodor or one of the    *
  * Insecure.Org development mailing lists, or checking them into the Nmap  *
  * source code repository, it is understood (unless you specify otherwise) *
- * that you are offering the Nmap Project (Insecure.Com LLC) the           *
+ * that you are offering the Nmap Project (Nmap Software LLC) the          *
  * unlimited, non-exclusive right to reuse, modify, and relicense the      *
  * code.  Nmap will always be available Open Source, but this is important *
  * because the inability to relicense code has caused devastating problems *
@@ -235,7 +234,7 @@ static int percent_decode(char *s) {
 static int uri_parse_authority(const char *authority, struct uri *uri) {
   const char *portsep;
   const char *host_start, *host_end;
-  char *tail;
+  const char *tail;
 
   /* We do not support "user:pass@" userinfo. The proxy has no use for it. */
   if (strchr(authority, '@') != NULL)

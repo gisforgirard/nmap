@@ -2,126 +2,58 @@
  * ncat_connect.c -- Ncat connect mode.                                    *
  ***********************IMPORTANT NMAP LICENSE TERMS************************
  *                                                                         *
- * The Nmap Security Scanner is (C) 1996-2019 Insecure.Com LLC ("The Nmap  *
+ * The Nmap Security Scanner is (C) 1996-2022 Nmap Software LLC ("The Nmap *
  * Project"). Nmap is also a registered trademark of the Nmap Project.     *
- * This program is free software; you may redistribute and/or modify it    *
- * under the terms of the GNU General Public License as published by the   *
- * Free Software Foundation; Version 2 ("GPL"), BUT ONLY WITH ALL OF THE   *
- * CLARIFICATIONS AND EXCEPTIONS DESCRIBED HEREIN.  This guarantees your   *
- * right to use, modify, and redistribute this software under certain      *
- * conditions.  If you wish to embed Nmap technology into proprietary      *
- * software, we sell alternative licenses (contact sales@nmap.com).        *
- * Dozens of software vendors already license Nmap technology such as      *
- * host discovery, port scanning, OS detection, version detection, and     *
- * the Nmap Scripting Engine.                                              *
  *                                                                         *
- * Note that the GPL places important restrictions on "derivative works",  *
- * yet it does not provide a detailed definition of that term.  To avoid   *
- * misunderstandings, we interpret that term as broadly as copyright law   *
- * allows.  For example, we consider an application to constitute a        *
- * derivative work for the purpose of this license if it does any of the   *
- * following with any software or content covered by this license          *
- * ("Covered Software"):                                                   *
+ * This program is distributed under the terms of the Nmap Public Source   *
+ * License (NPSL). The exact license text applying to a particular Nmap    *
+ * release or source code control revision is contained in the LICENSE     *
+ * file distributed with that version of Nmap or source code control       *
+ * revision. More Nmap copyright/legal information is available from       *
+ * https://nmap.org/book/man-legal.html, and further information on the    *
+ * NPSL license itself can be found at https://nmap.org/npsl/ . This       *
+ * header summarizes some key points from the Nmap license, but is no      *
+ * substitute for the actual license text.                                 *
  *                                                                         *
- * o Integrates source code from Covered Software.                         *
+ * Nmap is generally free for end users to download and use themselves,    *
+ * including commercial use. It is available from https://nmap.org.        *
  *                                                                         *
- * o Reads or includes copyrighted data files, such as Nmap's nmap-os-db   *
- * or nmap-service-probes.                                                 *
+ * The Nmap license generally prohibits companies from using and           *
+ * redistributing Nmap in commercial products, but we sell a special Nmap  *
+ * OEM Edition with a more permissive license and special features for     *
+ * this purpose. See https://nmap.org/oem/                                 *
  *                                                                         *
- * o Is designed specifically to execute Covered Software and parse the    *
- * results (as opposed to typical shell or execution-menu apps, which will *
- * execute anything you tell them to).                                     *
+ * If you have received a written Nmap license agreement or contract       *
+ * stating terms other than these (such as an Nmap OEM license), you may   *
+ * choose to use and redistribute Nmap under those terms instead.          *
  *                                                                         *
- * o Includes Covered Software in a proprietary executable installer.  The *
- * installers produced by InstallShield are an example of this.  Including *
- * Nmap with other software in compressed or archival form does not        *
- * trigger this provision, provided appropriate open source decompression  *
- * or de-archiving software is widely available for no charge.  For the    *
- * purposes of this license, an installer is considered to include Covered *
- * Software even if it actually retrieves a copy of Covered Software from  *
- * another source during runtime (such as by downloading it from the       *
- * Internet).                                                              *
- *                                                                         *
- * o Links (statically or dynamically) to a library which does any of the  *
- * above.                                                                  *
- *                                                                         *
- * o Executes a helper program, module, or script to do any of the above.  *
- *                                                                         *
- * This list is not exclusive, but is meant to clarify our interpretation  *
- * of derived works with some common examples.  Other people may interpret *
- * the plain GPL differently, so we consider this a special exception to   *
- * the GPL that we apply to Covered Software.  Works which meet any of     *
- * these conditions must conform to all of the terms of this license,      *
- * particularly including the GPL Section 3 requirements of providing      *
- * source code and allowing free redistribution of the work as a whole.    *
- *                                                                         *
- * As another special exception to the GPL terms, the Nmap Project grants  *
- * permission to link the code of this program with any version of the     *
- * OpenSSL library which is distributed under a license identical to that  *
- * listed in the included docs/licenses/OpenSSL.txt file, and distribute   *
- * linked combinations including the two.                                  *
- *                                                                         *
- * The Nmap Project has permission to redistribute Npcap, a packet         *
- * capturing driver and library for the Microsoft Windows platform.        *
- * Npcap is a separate work with it's own license rather than this Nmap    *
- * license.  Since the Npcap license does not permit redistribution        *
- * without special permission, our Nmap Windows binary packages which      *
- * contain Npcap may not be redistributed without special permission.      *
- *                                                                         *
- * Any redistribution of Covered Software, including any derived works,    *
- * must obey and carry forward all of the terms of this license, including *
- * obeying all GPL rules and restrictions.  For example, source code of    *
- * the whole work must be provided and free redistribution must be         *
- * allowed.  All GPL references to "this License", are to be treated as    *
- * including the terms and conditions of this license text as well.        *
- *                                                                         *
- * Because this license imposes special exceptions to the GPL, Covered     *
- * Work may not be combined (even as part of a larger work) with plain GPL *
- * software.  The terms, conditions, and exceptions of this license must   *
- * be included as well.  This license is incompatible with some other open *
- * source licenses as well.  In some cases we can relicense portions of    *
- * Nmap or grant special permissions to use it in other open source        *
- * software.  Please contact fyodor@nmap.org with any such requests.       *
- * Similarly, we don't incorporate incompatible open source software into  *
- * Covered Software without special permission from the copyright holders. *
- *                                                                         *
- * If you have any questions about the licensing restrictions on using     *
- * Nmap in other works, we are happy to help.  As mentioned above, we also *
- * offer an alternative license to integrate Nmap into proprietary         *
- * applications and appliances.  These contracts have been sold to dozens  *
- * of software vendors, and generally include a perpetual license as well  *
- * as providing support and updates.  They also fund the continued         *
- * development of Nmap.  Please email sales@nmap.com for further           *
- * information.                                                            *
- *                                                                         *
- * If you have received a written license agreement or contract for        *
- * Covered Software stating terms other than these, you may choose to use  *
- * and redistribute Covered Software under those terms instead of these.   *
+ * The official Nmap Windows builds include the Npcap software             *
+ * (https://npcap.com) for packet capture and transmission. It is under    *
+ * separate license terms which forbid redistribution without special      *
+ * permission. So the official Nmap Windows builds may not be              *
+ * redistributed without special permission (such as an Nmap OEM           *
+ * license).                                                               *
  *                                                                         *
  * Source is provided to this software because we believe users have a     *
  * right to know exactly what a program is going to do before they run it. *
  * This also allows you to audit the software for security holes.          *
  *                                                                         *
  * Source code also allows you to port Nmap to new platforms, fix bugs,    *
- * and add new features.  You are highly encouraged to send your changes   *
- * to the dev@nmap.org mailing list for possible incorporation into the    *
- * main distribution.  By sending these changes to Fyodor or one of the    *
- * Insecure.Org development mailing lists, or checking them into the Nmap  *
- * source code repository, it is understood (unless you specify            *
- * otherwise) that you are offering the Nmap Project the unlimited,        *
- * non-exclusive right to reuse, modify, and relicense the code.  Nmap     *
- * will always be available Open Source, but this is important because     *
- * the inability to relicense code has caused devastating problems for     *
- * other Free Software projects (such as KDE and NASM).  We also           *
- * occasionally relicense the code to third parties as discussed above.    *
- * If you wish to specify special license conditions of your               *
- * contributions, just say so when you send them.                          *
+ * and add new features.  You are highly encouraged to submit your         *
+ * changes as a Github PR or by email to the dev@nmap.org mailing list     *
+ * for possible incorporation into the main distribution. Unless you       *
+ * specify otherwise, it is understood that you are offering us very       *
+ * broad rights to use your submissions as described in the Nmap Public    *
+ * Source License Contributor Agreement. This is important because we      *
+ * fund the project by selling licenses with various terms, and also       *
+ * because the inability to relicense code has caused devastating          *
+ * problems for other Free Software projects (such as KDE and NASM).       *
  *                                                                         *
- * This program is distributed in the hope that it will be useful, but     *
- * WITHOUT ANY WARRANTY; without even the implied warranty of              *
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the Nmap      *
- * license file for more details (it's in a COPYING file included with     *
- * Nmap, and also available from https://svn.nmap.org/nmap/COPYING)        *
+ * The free version of Nmap is distributed in the hope that it will be     *
+ * useful, but WITHOUT ANY WARRANTY; without even the implied warranty of  *
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. Warranties,        *
+ * indemnification and commercial support are all available through the    *
+ * Npcap OEM program--see https://nmap.org/oem/                            *
  *                                                                         *
  ***************************************************************************/
 
@@ -620,6 +552,8 @@ static int do_proxy_socks4(void)
     union sockaddr_u addr;
     size_t sslen;
     int sd;
+    size_t remainderlen;
+    char* remainder;
 
     if (getaddrfamily(o.target) == 2) {
         loguser("Error: IPv6 addresses are not supported with Socks4.\n");
@@ -697,6 +631,10 @@ static int do_proxy_socks4(void)
         return -1;
     }
 
+    /* whatever is left in the buffer is part of the proxied connection */
+    remainder = socket_buffer_remainder(&stateful_buf, &remainderlen);
+    Write(STDOUT_FILENO, remainder, remainderlen);
+
     return sd;
 }
 
@@ -709,7 +647,7 @@ static int do_proxy_socks5(void)
     struct socket_buffer stateful_buf;
     struct socks5_connect socks5msg;
     uint16_t proxyport = htons(o.portno);
-    char socksbuf[8];
+    char socksbuf[4];
     int sd;
     size_t dstlen, targetlen;
     struct socks5_request socks5msg2;
@@ -721,6 +659,10 @@ static int do_proxy_socks5(void)
     void *addrbuf;
     size_t addrlen;
     char addrstr[INET6_ADDRSTRLEN];
+    size_t bndaddrlen;
+    char bndaddr[SOCKS5_DST_MAXLEN + 2]; /* IPv4/IPv6/hostname and port */
+    size_t remainderlen;
+    char* remainder;
 
     sd = do_connect(SOCK_STREAM);
     if (sd == -1) {
@@ -749,15 +691,15 @@ static int do_proxy_socks5(void)
         return -1;
     }
 
-    /* first response just two bytes, version and auth method */
+    /* connect response just two bytes, version and auth method */
     if (socket_buffer_readcount(&stateful_buf, socksbuf, 2) < 0) {
-        loguser("Error: malformed first response from proxy.\n");
+        loguser("Error: malformed connect response from proxy.\n");
         close(sd);
         return -1;
     }
 
     if (socksbuf[0] != SOCKS5_VERSION) {
-        loguser("Error: got wrong server version in response.\n");
+        loguser("Error: wrong SOCKS version in connect response.\n");
         close(sd);
         return -1;
     }
@@ -812,8 +754,8 @@ static int do_proxy_socks5(void)
              * Server response for username/password authentication:
              * field 1: version, 1 byte
              * field 2: status code, 1 byte.
-             * 0x00 = success
-             * any other value = failure, connection must be closed
+             *          0x00 = success
+             *          any other value = failure, connection must be closed
              */
 
             socks5auth.ver = 1;
@@ -873,7 +815,7 @@ static int do_proxy_socks5(void)
         if (o.verbose)
             loguser("Host %s will be resolved by the proxy.\n", o.target);
         socks5msg2.atyp = SOCKS5_ATYP_NAME;
-        targetlen=strlen(o.target);
+        targetlen = strlen(o.target);
         if (targetlen > SOCKS5_DST_MAXLEN){
             loguser("Error: hostname length exceeds %d.\n", SOCKS5_DST_MAXLEN);
             close(sd);
@@ -915,9 +857,14 @@ static int do_proxy_socks5(void)
         return -1;
     }
 
-    /* TODO just two bytes for now, need to read more for bind */
-    if (socket_buffer_readcount(&stateful_buf, socksbuf, 2) < 0) {
-        loguser("Error: malformed second response from proxy.\n");
+    if (socket_buffer_readcount(&stateful_buf, socksbuf, 4) < 0) {
+        loguser("Error: malformed request response from proxy.\n");
+        close(sd);
+        return -1;
+    }
+
+    if (socksbuf[0] != SOCKS5_VERSION) {
+        loguser("Error: wrong SOCKS version in request response.\n");
         close(sd);
         return -1;
     }
@@ -965,6 +912,37 @@ static int do_proxy_socks5(void)
             return -1;
     }
 
+    switch (socksbuf[3]) {
+    case SOCKS5_ATYP_IPv4:
+        bndaddrlen = 4 + 2;
+        break;
+    case SOCKS5_ATYP_IPv6:
+        bndaddrlen = 16 + 2;
+        break;
+    case SOCKS5_ATYP_NAME:
+        if (socket_buffer_readcount(&stateful_buf, socksbuf, 1) < 0) {
+            loguser("Error: malformed request response from proxy.\n");
+            close(sd);
+            return -1;
+        }
+        bndaddrlen = (unsigned char)socksbuf[0] + 2;
+        break;
+    default:
+        loguser("Error: invalid proxy bind address type.\n");
+        close(sd);
+        return -1;
+    }
+
+    if (socket_buffer_readcount(&stateful_buf, bndaddr, bndaddrlen) < 0) {
+        loguser("Error: malformed request response from proxy.\n");
+        close(sd);
+        return -1;
+    }
+
+    /* whatever is left in the buffer is part of the proxied connection */
+    remainder = socket_buffer_remainder(&stateful_buf, &remainderlen);
+    Write(STDOUT_FILENO, remainder, remainderlen);
+
     return(sd);
 }
 
@@ -972,7 +950,7 @@ static nsock_iod new_iod(nsock_pool mypool) {
    nsock_iod nsi = nsock_iod_new(mypool, NULL);
    if (nsi == NULL)
      bye("Failed to create nsock_iod.");
-   if (nsock_iod_set_hostname(nsi, o.target) == -1)
+   if (nsock_iod_set_hostname(nsi, o.sslservername) == -1)
      bye("Failed to set hostname on iod.");
 
    switch (srcaddr.storage.ss_family) {
@@ -1128,15 +1106,21 @@ int ncat_connect(void)
         /* Once the proxy negotiation is done, Nsock takes control of the
            socket. */
         cs.sock_nsi = nsock_iod_new2(mypool, connect_socket, NULL);
-        nsock_iod_set_hostname(cs.sock_nsi, o.target);
+        if (nsock_iod_set_hostname(cs.sock_nsi, o.sslservername) == -1)
+            bye("Failed to set hostname on iod.");
         if (o.ssl)
         {
+            /* connect_handler creates stdin_nsi and calls post_connect */
             nsock_reconnect_ssl(mypool, cs.sock_nsi, connect_handler, o.conntimeout, NULL, NULL);
         }
+        else
+        {
+            /* Create IOD for nsp->stdin */
+            if ((cs.stdin_nsi = nsock_iod_new2(mypool, 0, NULL)) == NULL)
+                bye("Failed to create stdin nsiod.");
 
-        /* Create IOD for nsp->stdin */
-        if ((cs.stdin_nsi = nsock_iod_new2(mypool, 0, NULL)) == NULL)
-            bye("Failed to create stdin nsiod.");
+            post_connect(mypool, cs.sock_nsi);
+        }
     }
 
     /* connect */
@@ -1267,7 +1251,7 @@ static void connect_handler(nsock_pool nsp, nsock_event evt, void *data)
     if (nsock_iod_check_ssl(cs.sock_nsi)) {
         /* Check the domain name. ssl_post_connect_check prints an
            error message if appropriate. */
-        if (!ssl_post_connect_check((SSL *)nsock_iod_get_ssl(cs.sock_nsi), o.target))
+        if (!ssl_post_connect_check((SSL *)nsock_iod_get_ssl(cs.sock_nsi), o.sslservername))
             bye("Certificate verification error.");
     }
 #endif

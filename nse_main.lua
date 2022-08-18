@@ -335,24 +335,28 @@ do
     return Worker[key] or self.parent[key]
   end
 
+  local function replace(fmt, pattern, repl)
+    -- Escape each % twice: once for gsub, and once for print_debug.
+    local r = gsub(repl, "%%", "%%%%%%%%")
+    return gsub(fmt, pattern, r);
+  end
   -- Thread:d()
   -- Outputs debug information at level 1 or higher.
   -- Changes "%THREAD" with an appropriate identifier for the debug level
   function Thread:d (fmt, ...)
     local against = against_name(self.host, self.port);
-    local function replace(fmt, pattern, repl)
-      -- Escape each % twice: once for gsub, and once for print_debug.
-      local r = gsub(repl, "%%", "%%%%%%%%")
-      return gsub(fmt, pattern, r);
-    end
-    if debugging() > 1 then
+    local dbg = debugging()
+    if dbg > 1 then
       fmt = replace(fmt, "%%THREAD_AGAINST", self.info..against);
       fmt = replace(fmt, "%%THREAD", self.info);
-    else
+    elseif dbg == 1 then
       fmt = replace(fmt, "%%THREAD_AGAINST", self.short_basename..against);
       fmt = replace(fmt, "%%THREAD", self.short_basename);
+    else
+      return
     end
-    print_debug(1, fmt, ...);
+    -- debugging() >= 1
+    log_write("stdout", format(fmt, ...));
   end
 
   -- Sets script output. r1 and r2 are the (as many as two) return values.
@@ -384,16 +388,16 @@ do
   -- prerule/postrule scripts may be timed out in the future
   -- based on start time and script lifetime?
   function Thread:timed_out ()
-    local host_timeout, script_timeout = false, false;
     -- checking whether user gave --script-timeout option or not
-    if cnse.script_timeout and cnse.script_timeout > 0 then
+    if cnse.script_timeout and cnse.script_timeout > 0 and
       -- comparing script's timeout with time elapsed
-      script_timeout = cnse.script_timeout < difftime(time(), self.start_time)
+      cnse.script_timeout < difftime(time(), self.start_time) then
+      return true
     end
-    if self.type == "hostrule" or self.type == "portrule" then
-      host_timeout = cnse.timedOut(self.host);
+    if self.host then
+      return cnse.timedOut(self.host)
     end
-    return script_timeout or host_timeout;
+    return false
   end
 
   function Thread:start_time_out_clock ()
@@ -519,7 +523,15 @@ do
       self.action_started = true
       return self:resume(timeouts);
     elseif not ok then
-      if debugging() > 0 then
+      -- Extend this to create new types of errors with custom handling.
+      -- nmap.new_try does equivalent of: error({errtype="nmap.new_try", message="TIMEOUT"})
+      if type(r1) == "table" and r1.errtype == "nmap.new_try" then
+        -- nmap.new_try "exception" is closing the script
+        if debugging() > 0 then
+          self:d("Finished %THREAD_AGAINST. Reason: %s\n", r1.message);
+        end
+        r1 = r1.message
+      elseif debugging() > 0 then
         self:d("%THREAD_AGAINST threw an error!\n%s\n", traceback(self.co, tostring(r1)));
       else
         self:set_output("ERROR: Script execution failed (use -d to debug)");
@@ -537,7 +549,10 @@ do
     elseif status == "dead" then
       if self.action_started then
         self:set_output(r1, r2);
-        self:d("Finished %THREAD_AGAINST.");
+        -- -d1 = report finished scripts. -d2 = report finished threads
+        if not self.worker or debugging() > 1 then
+          self:d("Finished %THREAD_AGAINST.");
+        end
       end
       self:close(timeouts);
     end
@@ -817,6 +832,8 @@ local function get_chosen_scripts (rules)
         if not (cnse.scriptversion and rule == "version") then
           error("'"..rule.."' did not match a category, filename, or directory");
         end
+      elseif t == "bare_directory" then
+        error("directory '"..path.."' found, but will not match without '/'")
       elseif t == "file" and not files_loaded[path] then
         script_params.selection = "file path";
         script_params.verbosity = true;
@@ -1035,15 +1052,15 @@ local function run (threads_iter, hosts)
       end
     end
 
+    local orphans = true
     -- Checked for timed-out scripts and hosts.
     for co, thread in pairs(waiting) do
       if thread:timed_out() then
         waiting[co], all[co], num_threads = nil, nil, num_threads-1;
-        thread:d("%THREAD %stimed out", thread.host
-            and format("%s%s ", thread.host.ip,
-                    thread.port and ":"..thread.port.number or "")
-            or "");
+        thread:d("%THREAD_AGAINST timed out")
         thread:close(timeouts, "timed out");
+      elseif not thread.worker then
+        orphans = false
       end
     end
 
@@ -1053,6 +1070,9 @@ local function run (threads_iter, hosts)
 
       if thread:resume(timeouts) then
         waiting[co] = thread;
+        if not thread.worker then
+          orphans = false
+        end
       else
         all[co], num_threads = nil, num_threads-1;
       end
@@ -1063,9 +1083,17 @@ local function run (threads_iter, hosts)
     -- Move pending threads back to running.
     for co, thread in pairs(pending) do
       pending[co], running[co] = nil, thread;
+      if not thread.worker then
+        orphans = false
+      end
     end
 
     collectgarbage "step";
+    -- If we didn't see at least one non-worker thread, then any remaining are orphaned.
+    if num_threads > 0 and orphans then
+      print_debug(1, "%d orphans left!", total)
+      break
+    end
   end
 
   progress "endTask";
@@ -1090,15 +1118,21 @@ local function format_table(obj, indent)
     local lines = {};
     -- Do integer keys.
     for _, v in ipairs(obj) do
-      lines[#lines + 1] = indent .. format_table(v, indent .. "  ");
+      lines[#lines + 1] = "\n"
+      lines[#lines + 1] = indent
+      lines[#lines + 1] = format_table(v, indent .. "  ")
     end
     -- Do string keys.
     for k, v in pairs(obj) do
       if type(k) == "string" then
-        lines[#lines + 1] = indent .. k .. ": " .. format_table(v, indent .. "  ");
+        lines[#lines + 1] = "\n"
+        lines[#lines + 1] = indent
+        lines[#lines + 1] = k
+        lines[#lines + 1] = ": "
+        lines[#lines + 1] = format_table(v, indent .. "  ")
       end
     end
-    return "\n" .. concat(lines, "\n");
+    return concat(lines);
   else
     return tostring(obj);
   end

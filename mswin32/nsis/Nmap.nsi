@@ -7,11 +7,10 @@
 ;;   /REGISTERPATH=NO  don't add the installation directory to PATH
 ;;   /NPCAP=NO         don't install Npcap
 ;;   /REGISTRYMODS=NO  don't install performance-related registry mods
-;;   /ZENMAP=NO        don't install Zenmap
+;;   /ZENMAP=NO        don't install Zenmap (non-OEM only)
 ;;   /NCAT=NO          don't install Ncat
-;;   /NDIFF=NO         don't install Ndiff
+;;   /NDIFF=NO         don't install Ndiff (non-OEM only)
 ;;   /NPING=NO         don't install Nping
-;;   /NMAPUPDATE=NO    don't install nmap-update
 ;;   /D=C:\dir\...     install to C:\dir\... (overrides InstallDir)
 ;;
 ;;/D is a built-in NSIS option and has these restrictions:
@@ -25,8 +24,13 @@
 !error "Need to use large strings build of NSIS."
 !endif
 
+!define STAGE_DIR ..\nmap-${VERSION}
+
 !ifdef NMAP_OEM
 !include "..\..\..\nmap-build\nmap-oem.nsh"
+!define STAGE_DIR_OEM ${STAGE_DIR}-oem
+!else
+!define STAGE_DIR_OEM ${STAGE_DIR}
 !endif
 
 ;--------------------------------
@@ -35,49 +39,29 @@
   !include "MUI.nsh"
   !include "AddToPath.nsh"
   !include "FileFunc.nsh"
+  !include "WordFunc.nsh"
   !include "Sections.nsh"
 
 ;--------------------------------
 ;General
-!define NMAP_NAME "@@PRODUCT_NAME@@"
-!define FILE_SUFFIX "@@OEM_SUFFIX@@"
   ;Name and file
   Name "${NMAP_NAME}"
-
-;--------------------------------
-; Sign the uninstaller
-; http://nsis.sourceforge.net/Signing_an_Uninstaller
+  Unicode true
 
 !ifdef INNER
+  # Write an uninstaller only
   !insertmacro MUI_UNPAGE_CONFIRM
   !insertmacro MUI_UNPAGE_INSTFILES
   !echo "Inner invocation"                  ; just to see what's going on
-  OutFile "$%TEMP%\tempinstaller.exe"       ; not really important where this is
+  OutFile "${STAGE_DIR_OEM}\tempinstaller.exe" ; Ensure we don't confuse these
   SetCompress off                           ; for speed
   RequestExecutionLevel user
 !else
   !echo "Outer invocation"
 
-  ; Call makensis again, defining INNER.  This writes an installer for us which, when
-  ; it is invoked, will just write the uninstaller to some location, and then exit.
-  ; Be sure to substitute the name of this script here.
-
-  !system "$\"${NSISDIR}\makensis$\" /DINNER Nmap.nsi" = 0
-
-  ; So now run that installer we just created as %TEMP%\tempinstaller.exe.  Since it
-  ; calls quit the return value isn't zero.
-
-  !system "$\"$%TEMP%\tempinstaller.exe$\"" = 2
-
-  ; That will have written an uninstaller binary for us.  Now we sign it with your
-  ; favourite code signing tool.
-
-  ;!system "icacls.exe $\"$%TEMP%\Uninstall.exe$\" /grant $\"$%USER%$\":M"
-  !system "copy /b $\"$%TEMP%\Uninstall.exe$\" Uninstall.exe"
-  !system "$\"C:/Program Files (x86)/Windows Kits/8.1/bin/x86/signtool.exe$\" sign /a /n $\"Insecure.Com LLC$\" /tr http://timestamp.digicert.com /td sha256 /fd sha256 Uninstall.exe" = 0
-
   ; Good.  Now we can carry on writing the real installer.
 
+  OutFile ${STAGE_DIR_OEM}-setup.exe
   SetCompressor /SOLID /FINAL lzma
 
   ;Required for removing shortcuts
@@ -90,14 +74,12 @@
   ;Get installation folder from registry if available
   InstallDirRegKey HKCU "Software\${NMAP_NAME}" ""
 
-  !define VERSION @@VERSION@@
-  !define STAGE_DIR ..\nmap-${VERSION}
-  VIProductVersion @@VIPRODUCTVERSION@@
+  VIProductVersion ${NUM_VERSION}
   VIAddVersionKey /LANG=1033 "FileVersion" "${VERSION}"
   VIAddVersionKey /LANG=1033 "ProductName" "${NMAP_NAME}"
   VIAddVersionKey /LANG=1033 "CompanyName" "Insecure.org"
   VIAddVersionKey /LANG=1033 "InternalName" "NmapInstaller.exe"
-  VIAddVersionKey /LANG=1033 "LegalCopyright" "Copyright (c) Insecure.Com LLC (fyodor@insecure.org)"
+  VIAddVersionKey /LANG=1033 "LegalCopyright" "Copyright (c) Nmap Software LLC (fyodor@nmap.org)"
   VIAddVersionKey /LANG=1033 "LegalTrademark" "NMAP"
   VIAddVersionKey /LANG=1033 "FileDescription" "${NMAP_NAME} installer"
 
@@ -109,13 +91,13 @@
 ;--------------------------------
 ;Pages
 
-  !insertmacro MUI_PAGE_LICENSE "..\LICENSE"
+  !insertmacro MUI_PAGE_LICENSE "..\LICENSE.formatted"
   !insertmacro MUI_PAGE_COMPONENTS
   !insertmacro MUI_PAGE_DIRECTORY
   !insertmacro MUI_PAGE_INSTFILES
-  !insertmacro MUI_UNPAGE_CONFIRM
-  !insertmacro MUI_UNPAGE_INSTFILES
+!ifndef NMAP_OEM
   Page custom shortcutsPage makeShortcuts
+!endif
   Page custom finalPage doFinal
 
 ;--------------------------------
@@ -129,15 +111,22 @@
 ;--------------------------------
 ;Variables
 
+!ifndef NMAP_OEM
 Var zenmapset
+!endif
 Var addremoveset
-Var vcredist2013set
-Var vcredist2008set
+Var vcredistset
+!define NMAP_ARCH x86
+!define VCREDISTEXE VC_redist.${NMAP_ARCH}.exe
+!define VCREDISTVER 14.0
+!define VCREDISTYEAR 2019
 
 ;--------------------------------
 ;Reserves
 
+!ifndef NMAP_OEM
 ReserveFile "shortcuts.ini"
+!endif
 ReserveFile "final.ini"
 !insertmacro MUI_RESERVEFILE_INSTALLOPTIONS
 
@@ -147,6 +136,7 @@ ReserveFile "final.ini"
 ;The .onInit function is below the Sections because it needs to refer to
 ;the Section IDs which are not defined yet.
 
+!ifndef NMAP_OEM
 Function shortcutsPage
   StrCmp $zenmapset "" skip
 
@@ -176,6 +166,7 @@ Function makeShortcuts
 
   skip:
 FunctionEnd
+!endif
 
 Function finalPage
   ; diplay a page saying everything's finished
@@ -227,7 +218,7 @@ Section "Nmap Core Files" SecCore
 
   SetOverwrite on
   File ${STAGE_DIR}\CHANGELOG
-  File ${STAGE_DIR}\COPYING
+  File ${STAGE_DIR}\LICENSE
   File ${STAGE_DIR}\nmap-mac-prefixes
   File ${STAGE_DIR}\nmap-os-db
   File ${STAGE_DIR}\nmap-payloads
@@ -235,25 +226,25 @@ Section "Nmap Core Files" SecCore
   File ${STAGE_DIR}\nmap-rpc
   File ${STAGE_DIR}\nmap-service-probes
   File ${STAGE_DIR}\nmap-services
-  File ${STAGE_DIR}\nmap.exe
+  File ${STAGE_DIR_OEM}\nmap.exe
   File ${STAGE_DIR}\nse_main.lua
   File ${STAGE_DIR}\nmap.xsl
   File ${STAGE_DIR}\nmap_performance.reg
   File ${STAGE_DIR}\README-WIN32
   File ${STAGE_DIR}\3rd-party-licenses.txt
   File /r /x .svn ${STAGE_DIR}\licenses
-  File libssh2.dll
-  File zlibwapi.dll
-  File libeay32.dll
-  File ssleay32.dll
+  File ${STAGE_DIR}\libssh2.dll
+  File ${STAGE_DIR}\zlibwapi.dll
+  File ${STAGE_DIR}\libcrypto-1_1.dll
+  File ${STAGE_DIR}\libssl-1_1.dll
   File /r /x mswin32 /x .svn /x ncat ${STAGE_DIR}\scripts
   File /r /x mswin32 /x .svn ${STAGE_DIR}\nselib
-  File ..\icon1.ico
+  File ${STAGE_DIR}\icon1.ico
 
   ;Store installation folder
   WriteRegStr HKCU "Software\${NMAP_NAME}" "" $INSTDIR
 
-  Call vcredist2013installer
+  Call vcredistinstaller
   Call create_uninstaller
 
 SectionEnd
@@ -263,22 +254,21 @@ Section "Register Nmap Path" SecRegisterPath
   Call AddToPath
 SectionEnd
 
-Section "Npcap @@NPCAP_VERSION@@" SecNpcap
 !ifdef NMAP_OEM
-  !insertmacro NPCAP_OEM_INSTALL "npcap-@@NPCAP_VERSION@@-oem.exe"
+Section "Npcap ${NPCAP_VERSION} OEM" SecNpcap
+  !insertmacro NPCAP_OEM_INSTALL "npcap-${NPCAP_VERSION}-oem.exe"
+SectionEnd
 !else
+Section "Npcap ${NPCAP_VERSION}" SecNpcap
   SetOutPath "$PLUGINSDIR"
   SetOverwrite on
-  File "..\npcap-@@NPCAP_VERSION@@-oem.exe"
-  IfSilent npcap_silent npcap_loud
-  npcap_silent:
-  ExecWait '"$PLUGINSDIR\npcap-@@NPCAP_VERSION@@-oem.exe" /S /winpcap_mode=no'
-  Goto delete_npcap
-  npcap_loud:
-  ExecWait '"$PLUGINSDIR\npcap-@@NPCAP_VERSION@@-oem.exe" /winpcap_mode=no'
-  delete_npcap:
-  Delete "$PLUGINSDIR\npcap-@@NPCAP_VERSION@@-oem.exe"
+  File "..\npcap-${NPCAP_VERSION}.exe"
+  ExecWait '"$PLUGINSDIR\npcap-${NPCAP_VERSION}.exe" /loopback_support=no'
+SectionEnd
 !endif
+
+Section /o "Check online for newer Npcap" SecNewNpcap
+  ExecShell "open" "https://npcap.com/#download"
 SectionEnd
 
 Section "Network Performance Improvements" SecPerfRegistryMods
@@ -291,6 +281,7 @@ Section "Network Performance Improvements" SecPerfRegistryMods
   CopyFiles /SILENT "$PLUGINSDIR\nmap_performance.reg" "$INSTDIR"
 SectionEnd
 
+!ifndef NMAP_OEM
 Section "Zenmap (GUI Frontend)" SecZenmap
   SetOutPath "$INSTDIR"
   SetOverwrite on
@@ -301,16 +292,7 @@ Section "Zenmap (GUI Frontend)" SecZenmap
   File /r ${STAGE_DIR}\share
   File /r ${STAGE_DIR}\py2exe
   StrCpy $zenmapset "true"
-  Call vcredist2008installer
-  Call create_uninstaller
-SectionEnd
-
-Section "Ncat (Modern Netcat reincarnation)" SecNcat
-  SetOutPath "$INSTDIR"
-  SetOverwrite on
-  File ${STAGE_DIR}\ncat.exe
-  File ${STAGE_DIR}\ca-bundle.crt
-  Call vcredist2013installer
+  Call vcredistinstaller
   Call create_uninstaller
 SectionEnd
 
@@ -321,7 +303,17 @@ Section "Ndiff (Scan comparison tool)" SecNdiff
   File ${STAGE_DIR}\NDIFF_README
   File ${STAGE_DIR}\python27.dll
   File /r ${STAGE_DIR}\py2exe
-  Call vcredist2008installer
+  Call vcredistinstaller
+  Call create_uninstaller
+SectionEnd
+!endif
+
+Section "Ncat (Modern Netcat reincarnation)" SecNcat
+  SetOutPath "$INSTDIR"
+  SetOverwrite on
+  File ${STAGE_DIR}\ncat.exe
+  File ${STAGE_DIR}\ca-bundle.crt
+  Call vcredistinstaller
   Call create_uninstaller
 SectionEnd
 
@@ -329,87 +321,44 @@ Section "Nping (Packet generator)" SecNping
   SetOutPath "$INSTDIR"
   SetOverwrite on
   File ${STAGE_DIR}\nping.exe
-  Call vcredist2013installer
+  Call vcredistinstaller
   Call create_uninstaller
 SectionEnd
 
-#Section "nmap-update (updater for architecture-independent files)" SecNmapUpdate
-#  SetOutPath "$INSTDIR"
-#  SetOverwrite on
-#  File ${STAGE_DIR}\nmap-update.exe
-#  Call vcredist2013installer
-#  Call create_uninstaller
-#SectionEnd
-#
-Function vcredist2013installer
-  StrCmp $vcredist2013set "" 0 vcredist_done
-  StrCpy $vcredist2013set "true"
-  ;Check if VC++ 2013 runtimes are already installed.
+# Custom LogicLib test macro
+!macro _VCRedistInstalled _a _b _t _f
+  SetRegView 32
+  ReadRegStr $0 HKLM "SOFTWARE\Microsoft\VisualStudio\${VCREDISTVER}\VC\Runtimes\${NMAP_ARCH}" "Installed"
+  StrCmp $0 "1" `${_t}` `${_f}`
+!macroend
+# add dummy parameters for our test
+!define VCRedistInstalled `"" VCRedistInstalled ""`
+
+Function vcredistinstaller
+  ${If} $vcredistset != ""
+    Return
+  ${EndIf}
+  StrCpy $vcredistset "true"
+  ;Check if VC++ runtimes are already installed.
   ;This version creates a registry key that makes it easy to check whether a version (not necessarily the
-  ;one we may be about to install) of the VC++ 2013 redistributables have been installed. On x64 systems we need to check
-  ;the Wow6432Node registry key instead.
+  ;one we may be about to install) of the VC++ redistributables have been installed.
   ;Only run our installer if a version isn't already present, to prevent installing older versions resulting in error messages.
-  ReadRegStr $0 HKLM "SOFTWARE\Microsoft\DevDiv\vc\Servicing\12.0\RuntimeMinimum" "Install"
-  StrCmp $0 "1" vcredist_done vcredist_check_wow6432node
-  vcredist_check_wow6432node:
-    ReadRegStr $0 HKLM "SOFTWARE\Wow6432Node\Microsoft\DevDiv\vc\Servicing\12.0\RuntimeMinimum" "Install"
-    StrCmp $0 "1" vcredist_done vcredist_silent_install
-
-  ;If VC++ 2013 runtimes are not installed...
-  vcredist_silent_install:
-    DetailPrint "Installing Microsoft Visual C++ 2013 Redistributable"
+  ;If VC++ runtimes are not installed...
+  ${IfNot} ${VCRedistInstalled}
+    DetailPrint "Installing Microsoft Visual C++ ${VCREDISTYEAR} Redistributable"
     SetOutPath $PLUGINSDIR
-    File ${STAGE_DIR}\vcredist_x86.exe
-    ExecWait '"$PLUGINSDIR\vcredist_x86.exe" /q' $0
-    ;Check for successful installation of our vcredist_x86.exe...
-    ReadRegStr $0 HKLM "SOFTWARE\Microsoft\DevDiv\vc\Servicing\12.0\RuntimeMinimum" "Install"
-    StrCmp $0 "1" vcredist_success vcredist_not_present_check_wow6432node
-    vcredist_not_present_check_wow6432node:
-      ReadRegStr $0 HKLM "SOFTWARE\Wow6432Node\Microsoft\DevDiv\vc\Servicing\12.0\RuntimeMinimum" "Install"
-      StrCmp $0 "1" vcredist_success vcredist_not_present
+    File ..\${VCREDISTEXE}
+    ExecWait '"$PLUGINSDIR\${VCREDISTEXE}" /quiet' $0
+    ;Check for successful installation of our package...
+    Delete "$PLUGINSDIR\${VCREDISTEXE}"
 
-    vcredist_not_present:
-      DetailPrint "Microsoft Visual C++ 2013 Redistributable failed to install"
-      MessageBox MB_OK "Microsoft Visual C++ 2013 Redistributable Package (x86) failed to install. Please ensure your system meets the minimum requirements before running the installer again."
-      Goto vcredist_done
-    vcredist_success:
-      Delete "$PLUGINSDIR\vcredist_x86.exe"
-      DetailPrint "Microsoft Visual C++ 2013 Redistributable was successfully installed"
-  vcredist_done:
-FunctionEnd
-
-Function vcredist2008installer
-  StrCmp $vcredist2008set "" 0 vcredist2008_done
-  StrCpy $vcredist2008set "true"
-  ;Check if VC++ 2008 runtimes are already installed.
-  ;NOTE Both the UID in the registry key and the DisplayName string must be updated here (and below)
-  ;whenever the Redistributable package is upgraded:
-  ReadRegStr $0 HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{9BE518E6-ECC6-35A9-88E4-87755C07200F}" "DisplayName"
-  StrCmp $0 "Microsoft Visual C++ 2008 Redistributable - x86 9.0.30729.6161" vcredist2008_done vcredist2008_check_wow6432node
-  ;On x64 systems we need to check the Wow6432Node registry key instead
-  vcredist2008_check_wow6432node:
-    ReadRegStr $0 HKLM "SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\{9BE518E6-ECC6-35A9-88E4-87755C07200F}" "DisplayName"
-    StrCmp $0 "Microsoft Visual C++ 2008 Redistributable - x86 9.0.30729.6161" vcredist2008_done vcredist2008_silent_install
-  ;If VC++ 2008 runtimes are not installed...
-  vcredist2008_silent_install:
-    DetailPrint "Installing Microsoft Visual C++ 2008 Redistributable"
-    SetOutPath $PLUGINSDIR
-    File ${STAGE_DIR}\vcredist2008_x86.exe
-    ExecWait '"$PLUGINSDIR\vcredist2008_x86.exe" /q' $0
-    ;Check for successful installation of our 2008 version of vcredist_x86.exe...
-    ReadRegStr $0 HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{9BE518E6-ECC6-35A9-88E4-87755C07200F}" "DisplayName"
-    StrCmp $0 "Microsoft Visual C++ 2008 Redistributable - x86 9.0.30729.6161" vcredist2008_success vcredist2008_not_present_check_wow6432node
-    vcredist2008_not_present_check_wow6432node:
-      ReadRegStr $0 HKLM "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{9BE518E6-ECC6-35A9-88E4-87755C07200F}" "DisplayName"
-      StrCmp $0 "Microsoft Visual C++ 2008 Redistributable - x86 9.0.30729.6161" vcredist2008_success vcredist2008_not_present
-    vcredist2008_not_present:
-      DetailPrint "Microsoft Visual C++ 2008 Redistributable failed to install"
-      MessageBox MB_OK "Microsoft Visual C++ 2008 Redistributable Package (x86) failed to install. Please ensure your system meets the minimum requirements before running the installer again."
-      Goto vcredist2008_done
-    vcredist2008_success:
-      Delete "$PLUGINSDIR\vcredist2008_x86.exe"
-      DetailPrint "Microsoft Visual C++ 2008 Redistributable was successfully installed"
-  vcredist2008_done:
+    ${IfNot} ${VCRedistInstalled}
+      DetailPrint "Microsoft Visual C++ ${VCREDISTYEAR} Redistributable failed to install"
+      MessageBox MB_OK "Microsoft Visual C++ ${VCREDISTYEAR} Redistributable Package (${NMAP_ARCH}) failed to install. Please ensure your system meets the minimum requirements before running the installer again."
+    ${Else}
+      DetailPrint "Microsoft Visual C++ ${VCREDISTYEAR} Redistributable was successfully installed"
+    ${EndIf}
+  ${EndIf}
 FunctionEnd
 
 Function create_uninstaller
@@ -430,7 +379,7 @@ Function create_uninstaller
 
   ; this packages the signed uninstaller
 
-  File "Uninstall.exe"
+  File "${STAGE_DIR_OEM}\Uninstall.exe"
 !endif
   StrCpy $addremoveset "true"
   skipaddremove:
@@ -455,17 +404,36 @@ Function .onInit
   ; the installer.  This is better than processing a command line option as it means
   ; this entire code path is not present in the final (real) installer.
 
-  WriteUninstaller "$%TEMP%\Uninstall.exe"
+  ${GetParent} "$EXEPATH" $0
+  MessageBox MB_OK "Writing '$0\Uninstall.exe'"
+  WriteUninstaller "$0\Uninstall.exe"
   Quit  ; just bail out quickly when running the "inner" installer
 !endif
 
 !ifndef NMAP_OEM
-  ; Future releases may limit silent install to OEM-licensed installer
-  ;SetSilent normal
+  ${If} ${Silent}
+	  SetSilent normal
+	  MessageBox MB_OK|MB_ICONEXCLAMATION "Silent installation is only supported in Nmap OEM - https://nmap.org/oem/"
+	  Quit
+  ${EndIf}
+
+  ; shortcuts apply only to Zenmap, not included in NMAP_OEM
+  !insertmacro MUI_INSTALLOPTIONS_EXTRACT "shortcuts.ini"
 !endif
 
-  !insertmacro MUI_INSTALLOPTIONS_EXTRACT "shortcuts.ini"
   !insertmacro MUI_INSTALLOPTIONS_EXTRACT "final.ini"
+
+  ; Check if Npcap is already installed.
+  ReadRegStr $0 HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NpcapInst" "DisplayVersion"
+  ${If} $0 != ""
+    ${VersionCompare} $0 ${NPCAP_VERSION} $1
+    ; If our version is not newer than the installed version, don't offer to install Npcap.
+    ${If} $1 != 2
+      SectionGetFlags ${SecNpcap} $2
+      IntOp $2 $2 & ${SECTION_OFF}
+      SectionSetFlags ${SecNpcap} $2
+    ${EndIf}
+  ${EndIf}
 
   ;Disable section checkboxes based on options. For example /ZENMAP=NO to avoid
   ;installing Zenmap.
@@ -474,38 +442,43 @@ Function .onInit
   !insertmacro OptionDisableSection $0 "/REGISTERPATH=" ${SecRegisterPath}
   !insertmacro OptionDisableSection $0 "/NPCAP=" ${SecNpcap}
   !insertmacro OptionDisableSection $0 "/REGISTRYMODS=" ${SecPerfRegistryMods}
+!ifndef NMAP_OEM
   !insertmacro OptionDisableSection $0 "/ZENMAP=" ${SecZenmap}
-  !insertmacro OptionDisableSection $0 "/NCAT=" ${SecNcat}
   !insertmacro OptionDisableSection $0 "/NDIFF=" ${SecNdiff}
+!endif
+  !insertmacro OptionDisableSection $0 "/NCAT=" ${SecNcat}
   !insertmacro OptionDisableSection $0 "/NPING=" ${SecNping}
-  #!insertmacro OptionDisableSection $0 "/NMAPUPDATE=" ${SecNmapUpdate}
 FunctionEnd
 
 ;--------------------------------
 ;Descriptions
 
   ;Component strings
-  LangString DESC_SecCore ${LANG_ENGLISH} "Installs Nmap executable, NSE scripts and Visual C++ 2013 runtime components"
+  LangString DESC_SecCore ${LANG_ENGLISH} "Installs Nmap executable, NSE scripts and Visual C++ ${VCREDISTYEAR} runtime components"
   LangString DESC_SecRegisterPath ${LANG_ENGLISH} "Registers Nmap path to System path so you can execute it from any directory"
-  LangString DESC_SecNpcap ${LANG_ENGLISH} "Installs Npcap @@NPCAP_VERSION@@ (required for most Nmap scans unless it is already installed)"
+  LangString DESC_SecNpcap ${LANG_ENGLISH} "Installs Npcap ${NPCAP_VERSION} (required for most Nmap scans unless it is already installed)"
+  LangString DESC_SecNewNpcap ${LANG_ENGLISH} "Opens npcap.com in your web browser so you can check for a newer version of Npcap."
   LangString DESC_SecPerfRegistryMods ${LANG_ENGLISH} "Modifies Windows registry values to improve TCP connect scan performance.  Recommended."
-  LangString DESC_SecZenmap ${LANG_ENGLISH} "Installs Zenmap, the official Nmap graphical user interface, and Visual C++ 2008 runtime components.  Recommended."
-  LangString DESC_SecNcat ${LANG_ENGLISH} "Installs Ncat, Nmap's Netcat replacement."
+!ifndef NMAP_OEM
+  LangString DESC_SecZenmap ${LANG_ENGLISH} "Installs Zenmap, the official Nmap graphical user interface.  Recommended."
   LangString DESC_SecNdiff ${LANG_ENGLISH} "Installs Ndiff, a tool for comparing Nmap XML files."
+!endif
+  LangString DESC_SecNcat ${LANG_ENGLISH} "Installs Ncat, Nmap's Netcat replacement."
   LangString DESC_SecNping ${LANG_ENGLISH} "Installs Nping, a packet generation tool."
-  #LangString DESC_SecNmapUpdate ${LANG_ENGLISH} "Installs nmap-update, an updater for architecture-independent files."
 
   ;Assign language strings to sections
   !insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
     !insertmacro MUI_DESCRIPTION_TEXT ${SecCore} $(DESC_SecCore)
     !insertmacro MUI_DESCRIPTION_TEXT ${SecNpcap} $(DESC_SecNpcap)
+    !insertmacro MUI_DESCRIPTION_TEXT ${SecNewNpcap} $(DESC_SecNewNpcap)
     !insertmacro MUI_DESCRIPTION_TEXT ${SecRegisterPath} $(DESC_SecRegisterPath)
     !insertmacro MUI_DESCRIPTION_TEXT ${SecPerfRegistryMods} $(DESC_SecPerfRegistryMods)
+!ifndef NMAP_OEM
     !insertmacro MUI_DESCRIPTION_TEXT ${SecZenmap} $(DESC_SecZenmap)
-    !insertmacro MUI_DESCRIPTION_TEXT ${SecNcat} $(DESC_SecNcat)
     !insertmacro MUI_DESCRIPTION_TEXT ${SecNdiff} $(DESC_SecNdiff)
+!endif
+    !insertmacro MUI_DESCRIPTION_TEXT ${SecNcat} $(DESC_SecNcat)
     !insertmacro MUI_DESCRIPTION_TEXT ${SecNping} $(DESC_SecNping)
-    #!insertmacro MUI_DESCRIPTION_TEXT ${SecNmapUpdate} $(DESC_SecNmapUpdate)
   !insertmacro MUI_FUNCTION_DESCRIPTION_END
 ;--------------------------------
 ;Uninstaller Section
@@ -539,7 +512,6 @@ Section "Uninstall"
   IfFileExists $INSTDIR\ncat.exe nmap_installed
   IfFileExists $INSTDIR\nping.exe nmap_installed
   IfFileExists $INSTDIR\ndiff.exe nmap_installed
-  #IfFileExists $INSTDIR\nmap-update.exe nmap_installed
     MessageBox MB_YESNO "It does not appear that ${NMAP_NAME} is installed in the directory '$INSTDIR'.$\r$\nContinue anyway (not recommended)?" IDYES nmap_installed
     Abort "Uninstall aborted by user"
 
@@ -550,7 +522,7 @@ Section "Uninstall"
   nmap_installed:
   Delete "$INSTDIR\3rd-party-licenses.txt"
   Delete "$INSTDIR\CHANGELOG"
-  Delete "$INSTDIR\COPYING"
+  Delete "$INSTDIR\LICENSE"
   Delete "$INSTDIR\nmap-mac-prefixes"
   Delete "$INSTDIR\nmap-os-db"
   Delete "$INSTDIR\nmap-payloads"
@@ -566,8 +538,8 @@ Section "Uninstall"
   Delete "$INSTDIR\icon1.ico"
   Delete "$INSTDIR\libssh2.dll"
   Delete "$INSTDIR\zlibwapi.dll"
-  Delete "$INSTDIR\libeay32.dll"
-  Delete "$INSTDIR\ssleay32.dll"
+  Delete "$INSTDIR\libcrypto-1_1.dll"
+  Delete "$INSTDIR\libssl-1_1.dll"
   Delete "$INSTDIR\npcap-*.exe"
   Delete "$INSTDIR\zenmap.exe"
   Delete "$INSTDIR\ndiff.exe"
@@ -577,7 +549,6 @@ Section "Uninstall"
   Delete "$INSTDIR\COPYING_HIGWIDGETS"
   Delete "$INSTDIR\ncat.exe"
   Delete "$INSTDIR\nping.exe"
-  #Delete "$INSTDIR\nmap-update.exe"
   Delete "$INSTDIR\ca-bundle.crt"
   ;Delete specific subfolders (NB: custom scripts in scripts folder will be lost)
   RMDir /r "$INSTDIR\nselib"
@@ -594,7 +565,7 @@ Section "Uninstall"
   SetDetailsPrint textonly
   DetailPrint "Deleting Registry Keys..."
   SetDetailsPrint listonly
-  DeleteRegKey /ifempty HKCU "Software\${NMAP_NAME}"
+  DeleteRegKey HKCU "Software\${NMAP_NAME}"
   DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${NMAP_NAME}"
   SetDetailsPrint textonly
   DetailPrint "Unregistering Nmap Path..."
